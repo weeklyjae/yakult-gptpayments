@@ -3,6 +3,7 @@
 // All emails are compared in lowercase.
 
 const WHITELISTED_EMAILS = [
+    'jhonmartin.abonmalla.cics@ust.edu.ph',
   'ravin.agon.cics@ust.edu.ph',
   'ralphlorenz.bonifacio.cics@ust.edu.ph',
   'laurenznicolo.briones.cics@ust.edu.ph',
