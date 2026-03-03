@@ -12,12 +12,15 @@ import {
 import { useAuth } from './auth/AuthProvider.jsx'
 import { db } from './firebase'
 import {
-  BILLING_DAY,
   BILLING_START_MONTH,
   MONTHLY_PRICE_PHP,
   calculateDueSummary,
   formatMonthLabel,
 } from './utils/billing.js'
+import Header from './components/Header.jsx'
+import PaymentStatus from './components/PaymentStatus.jsx'
+import UploadSection from './components/UploadSection.jsx'
+import AdminDashboard from './components/AdminDashboard.jsx'
 
 function App() {
   const { user, isAdmin, checkingAuth, authError, signInWithGoogle, signOut } =
@@ -55,7 +58,6 @@ function App() {
           calculateDueSummary(rows, { billingStartMonth: BILLING_START_MONTH })
         )
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[Yakult GPT Payments] Failed to load payments', err)
         setPaymentsError(
           'Could not load your payment history. Please refresh in a moment.'
@@ -159,7 +161,6 @@ function App() {
         fileInputRef.current.value = ''
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[Yakult GPT Payments] Upload failed', err)
       setUploadError(
         err.message ||
@@ -229,172 +230,28 @@ function App() {
       <div className="glow-orb glow-orb-sm" />
 
       <div className="card-shell">
-        <header className="top-bar">
-          <div className="brand">
-            <div className="brand-pip" />
-            <div>
-              <div className="brand-title">Yakult GPT Payments</div>
-              <div className="brand-tagline">80 PHP / month · due every 5th</div>
-            </div>
-          </div>
-
-          <div className="user-pill">
-            {user.photoURL && (
-              <img
-                src={user.photoURL}
-                alt={user.displayName || user.email}
-                className="user-avatar"
-              />
-            )}
-            <div className="user-meta">
-              <span className="user-name">
-                {user.displayName || 'Yakult Friend'}
-              </span>
-              <span className="user-email">{user.email}</span>
-            </div>
-            {isAdmin && <span className="admin-badge">Admin</span>}
-            <button className="pill-logout" onClick={signOut}>
-              Log out
-            </button>
-          </div>
-        </header>
+        <Header user={user} isAdmin={isAdmin} onSignOut={signOut} />
 
         <main className="card-body">
-          <section className="status-section">
-            <h2 className="section-title">Payment status</h2>
-            {loadingPayments && (
-              <>
-                <p className="status-pill status-pill-neutral">
-                  Checking your payment history…
-                </p>
-                <p className="status-helper">
-                  We’re looking up which months you’re covered for since{' '}
-                  <strong>{BILLING_START_MONTH}</strong>.
-                </p>
-              </>
-            )}
+          <PaymentStatus
+            loadingPayments={loadingPayments}
+            paymentsError={paymentsError}
+            billingSummary={billingSummary}
+          />
 
-            {!loadingPayments && paymentsError && (
-              <div className="alert alert-error">
-                <p>{paymentsError}</p>
-              </div>
-            )}
+          <UploadSection
+            fileInputRef={fileInputRef}
+            selectedFile={selectedFile}
+            uploading={uploading}
+            uploadError={uploadError}
+            uploadSuccess={uploadSuccess}
+            billingSummary={billingSummary}
+            monthsForNextUpload={monthsForNextUpload}
+            onFileChange={handleFileChange}
+            onUpload={handleUpload}
+          />
 
-            {!loadingPayments && !paymentsError && billingSummary && (
-              <>
-                {billingSummary.dueMonths.length === 0 ? (
-                  <>
-                    <p className="status-pill status-pill-success">
-                      You’re fully up to date. No payments due right now.
-                    </p>
-                    <p className="status-helper">
-                      If you just paid, you can still upload a fresh receipt
-                      for this month for your own records.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="status-pill status-pill-warning">
-                      You have{' '}
-                      <strong>{billingSummary.dueMonths.length} month(s)</strong>{' '}
-                      due ·{' '}
-                      <strong>
-                        {billingSummary.totalDue.toLocaleString('en-PH')} PHP
-                      </strong>
-                    </p>
-                    <p className="status-helper">
-                      Payments are <strong>80 PHP per month</strong>. They
-                      become due every <strong>{BILLING_DAY}th</strong> and
-                      accumulate if unpaid.
-                    </p>
-                    <div className="chips-row">
-                      {billingSummary.dueMonths.map((monthId) => (
-                        <span key={monthId} className="chip chip-due">
-                          {formatMonthLabel(monthId)}
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {!loadingPayments && !paymentsError && !billingSummary && (
-              <p className="status-helper">
-                We’ll show your payment status here once your account loads.
-              </p>
-            )}
-
-            <div className="status-footer-note">
-              Starting month for billing:{' '}
-              <span className="mono">{BILLING_START_MONTH}</span> ·{' '}
-              <span className="mono">
-                {MONTHLY_PRICE_PHP.toLocaleString('en-PH')} PHP / month
-              </span>
-            </div>
-          </section>
-
-          <section className="upload-section">
-            <h2 className="section-title">Upload receipt</h2>
-            <p className="section-caption">
-              Attach a clear screenshot or PDF of your payment. We will mark the
-              oldest unpaid months first.
-            </p>
-
-            <div className="upload-row">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={handleFileChange}
-                className="file-input"
-              />
-              <button
-                className="btn-primary"
-                onClick={handleUpload}
-                disabled={uploading}
-              >
-                {uploading ? 'Uploading…' : 'Upload receipt'}
-              </button>
-            </div>
-
-            {billingSummary && (
-              <p className="status-helper">
-                This upload will apply to:{' '}
-                {monthsForNextUpload()
-                  .map((m) => formatMonthLabel(m))
-                  .join(', ')}
-                .
-              </p>
-            )}
-
-            {uploadError && (
-              <div className="alert alert-error">
-                <p>{uploadError}</p>
-              </div>
-            )}
-
-            {uploadSuccess && (
-              <div className="alert alert-success">
-                <p>{uploadSuccess}</p>
-              </div>
-            )}
-          </section>
-
-          {isAdmin && (
-            <section className="admin-section">
-              <h2 className="section-title">Admin dashboard</h2>
-              <p className="section-caption">
-                Only you can see this section. In the future you can expand this
-                into a full table of all users and payments.
-              </p>
-              <div className="status-helper">
-                For now, your own payment history is stored in Firestore under
-                the <span className="mono">payments</span> collection. You can
-                open Firebase console to review or adjust entries if needed.
-              </div>
-            </section>
-          )}
+          {isAdmin && <AdminDashboard payments={payments} />}
         </main>
       </div>
     </div>
