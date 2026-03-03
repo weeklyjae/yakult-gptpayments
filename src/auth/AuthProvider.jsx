@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
 } from 'firebase/auth'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
@@ -74,6 +75,26 @@ export function AuthProvider({ children }) {
     try {
       await signInWithPopup(auth, googleProvider)
     } catch (err) {
+      const code = String(err?.code || '')
+      const message = String(err?.message || '')
+      const isPopupIssue =
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/popup-blocked' ||
+        code === 'auth/cancelled-popup-request' ||
+        message.toLowerCase().includes('cross-origin-opener-policy')
+
+      if (isPopupIssue) {
+        try {
+          await signInWithRedirect(auth, googleProvider)
+          return
+        } catch (redirectErr) {
+          console.error(
+            '[Yakult GPT Payments] Google redirect sign-in failed',
+            redirectErr
+          )
+        }
+      }
+
       console.error('[Yakult GPT Payments] Google sign-in failed', err)
       setAuthError('signin-failed')
     }
