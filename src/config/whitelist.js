@@ -3,7 +3,7 @@
 // All emails are compared in lowercase.
 
 const WHITELISTED_EMAILS = [
-    'jhonmartin.abonmalla.cics@ust.edu.ph',
+    // 'jhonmartin.abonalla.cics@ust.edu.ph',
   'ravin.agon.cics@ust.edu.ph',
   'ralphlorenz.bonifacio.cics@ust.edu.ph',
   'laurenznicolo.briones.cics@ust.edu.ph',
@@ -21,7 +21,7 @@ const WHITELISTED_EMAILS = [
 ]
 
 // Admin accounts (will see the admin dashboard). You can change this list.
-export const ADMIN_EMAILS = ['jhonmartin.abonmalla.cics@ust.edu.ph']
+export const ADMIN_EMAILS = ['jhonmartin.abonalla.cics@ust.edu.ph']
 
 // Final whitelist = regular whitelisted users + all admins
 const NORMALIZED_WHITELIST = [...WHITELISTED_EMAILS, ...ADMIN_EMAILS]
