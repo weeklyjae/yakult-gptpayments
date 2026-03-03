@@ -62,20 +62,18 @@ export function AuthProvider({ children }) {
           { merge: true }
         )
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[Yakult GPT Payments] Failed to sync user profile', err)
       }
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [normalizedAdmins])
 
   const signInWithGoogle = async () => {
     setAuthError(null)
     try {
       await signInWithPopup(auth, googleProvider)
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[Yakult GPT Payments] Google sign-in failed', err)
       setAuthError('signin-failed')
     }
@@ -99,6 +97,7 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) {

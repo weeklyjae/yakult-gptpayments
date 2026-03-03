@@ -20,13 +20,12 @@ const WHITELISTED_EMAILS = [
 ]
 
 // Admin accounts (will see the admin dashboard). You can change this list.
-export const ADMIN_EMAILS = [
-  'jhonmartin.abonmalla.cics@ust.edu.ph',
-]
+export const ADMIN_EMAILS = ['jhonmartin.abonmalla.cics@ust.edu.ph']
 
-const NORMALIZED_WHITELIST = WHITELISTED_EMAILS.map((email) =>
-  String(email).trim().toLowerCase()
-).filter(Boolean)
+// Final whitelist = regular whitelisted users + all admins
+const NORMALIZED_WHITELIST = [...WHITELISTED_EMAILS, ...ADMIN_EMAILS]
+  .map((email) => String(email).trim().toLowerCase())
+  .filter(Boolean)
 
 export default NORMALIZED_WHITELIST
 
