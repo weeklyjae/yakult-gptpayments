@@ -1,10 +1,11 @@
 import React from 'react'
-import { MONTHLY_PRICE_PHP, formatMonthLabel } from '../utils/billing'
+import { formatMonthLabel } from '../utils/billing'
 
 function UploadSection({
   fileInputRef,
   selectedFile,
   uploading,
+  hasPendingVerification,
   uploadError,
   uploadSuccess,
   billingSummary,
@@ -12,38 +13,50 @@ function UploadSection({
   onFileChange,
   onUpload,
 }) {
+  const targetMonths = billingSummary ? monthsForNextUpload() : []
+  const visibleTargetMonths = targetMonths.slice(0, 2).map((m) => formatMonthLabel(m))
+  const moreMonthsCount = Math.max(targetMonths.length - visibleTargetMonths.length, 0)
+
   return (
     <section className="upload-section">
-      <h2 className="section-title">Upload receipt</h2>
-      <p className="section-caption">
-        Attach a clear screenshot or PDF of your payment. We will mark the
-        oldest unpaid months first.
-      </p>
-
-      <div className="upload-row">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={onFileChange}
-          className="file-input"
-        />
-        <button
-          className="btn-primary"
-          onClick={onUpload}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : 'Upload receipt'}
-        </button>
+      <div className="section-head-row">
+        <h2 className="section-title">Upload</h2>
+        <span className="mini-note">
+          {hasPendingVerification ? 'Waiting verification' : 'Image only'}
+        </span>
       </div>
+
+      {!hasPendingVerification && (
+        <div className="upload-row">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={onFileChange}
+            className="file-input"
+          />
+          <button
+            className="btn-primary"
+            onClick={onUpload}
+            disabled={uploading}
+          >
+            {uploading ? 'Uploading...' : 'Upload'}
+          </button>
+        </div>
+      )}
+
+      {hasPendingVerification && (
+        <div className="upload-waiting">
+          <span className="status-chip status-chip-verifying">verifying</span>
+        </div>
+      )}
+
+      {selectedFile && <p className="status-helper">{selectedFile.name}</p>}
 
       {billingSummary && (
         <p className="status-helper">
-          This upload will apply to:{' '}
-          {monthsForNextUpload()
-            .map((m) => formatMonthLabel(m))
-            .join(', ')}
-          .
+          For {visibleTargetMonths.join(', ')}
+          {moreMonthsCount > 0 ? ` +${moreMonthsCount} more` : ''}
         </p>
       )}
 
@@ -63,4 +76,3 @@ function UploadSection({
 }
 
 export default UploadSection
-

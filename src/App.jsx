@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import {
   addDoc,
   collection,
+  doc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   where,
 } from 'firebase/firestore'
 import { useAuth } from './auth/AuthProvider.jsx'
@@ -26,14 +28,34 @@ function App() {
   const { user, isAdmin, checkingAuth, authError, signInWithGoogle, signOut } =
     useAuth()
   const [payments, setPayments] = useState([])
+  const [adminPayments, setAdminPayments] = useState([])
+  const [adminUsers, setAdminUsers] = useState([])
+  const [loadingAdmin, setLoadingAdmin] = useState(false)
+  const [adminError, setAdminError] = useState(null)
+  const [updatingPaymentId, setUpdatingPaymentId] = useState(null)
   const [billingSummary, setBillingSummary] = useState(null)
+  const [effectiveBillingStartMonth, setEffectiveBillingStartMonth] =
+    useState(BILLING_START_MONTH)
   const [loadingPayments, setLoadingPayments] = useState(false)
   const [paymentsError, setPaymentsError] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const [uploadSuccess, setUploadSuccess] = useState(null)
+  const [activeView, setActiveView] = useState('home')
   const fileInputRef = useRef(null)
+
+  const toMonthId = (dateInput) => {
+    const date = new Date(dateInput)
+    if (Number.isNaN(date.getTime())) return null
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    return `${year}-${month}`
+  }
+
+  const laterMonthId = (a, b) => {
+    return a > b ? a : b
+  }
 
   useEffect(() => {
     if (!user) return
@@ -42,6 +64,11 @@ function App() {
       setLoadingPayments(true)
       setPaymentsError(null)
       try {
+        const accountStartMonth =
+          toMonthId(user?.metadata?.creationTime) || BILLING_START_MONTH
+        const startMonth = laterMonthId(BILLING_START_MONTH, accountStartMonth)
+        setEffectiveBillingStartMonth(startMonth)
+
         const paymentsRef = collection(db, 'payments')
         const q = query(
           paymentsRef,
@@ -55,13 +82,19 @@ function App() {
         }))
         setPayments(rows)
         setBillingSummary(
-          calculateDueSummary(rows, { billingStartMonth: BILLING_START_MONTH })
+          calculateDueSummary(rows, { billingStartMonth: startMonth })
         )
       } catch (err) {
         console.error('[Yakult GPT Payments] Failed to load payments', err)
-        setPaymentsError(
-          'Could not load your payment history. Please refresh in a moment.'
-        )
+        if (String(err?.code || '') === 'permission-denied') {
+          setPaymentsError(
+            'Signed in ka na. Temporary unavailable lang yung payment history ngayon, pero pwede ka pa rin mag-upload ng receipt image.'
+          )
+        } else {
+          setPaymentsError(
+            'Could not load your payment history. Please refresh in a moment.'
+          )
+        }
       } finally {
         setLoadingPayments(false)
       }
@@ -84,6 +117,16 @@ function App() {
     return [currentMonthId()]
   }
 
+  const hasPendingVerification = payments.some(
+    (payment) => String(payment?.status || '').toLowerCase() === 'submitted'
+  )
+
+  useEffect(() => {
+    if (!isAdmin && activeView === 'admin') {
+      setActiveView('home')
+    }
+  }, [isAdmin, activeView])
+
   const handleFileChange = (event) => {
     setSelectedFile(event.target.files?.[0] ?? null)
     setUploadError(null)
@@ -95,8 +138,13 @@ function App() {
     setUploadError(null)
     setUploadSuccess(null)
 
+    if (hasPendingVerification) {
+      setUploadError('Waiting for admin verification.')
+      return
+    }
+
     if (!selectedFile) {
-      setUploadError('Please choose a receipt image or PDF before uploading.')
+      setUploadError('Choose an image first.')
       return
     }
 
@@ -145,11 +193,14 @@ function App() {
         const updated = [newPaymentWithId, ...prev]
         setBillingSummary(
           calculateDueSummary(updated, {
-            billingStartMonth: BILLING_START_MONTH,
+            billingStartMonth: effectiveBillingStartMonth,
           })
         )
         return updated
       })
+      if (isAdmin) {
+        setAdminPayments((prev) => [newPaymentWithId, ...prev])
+      }
 
       setUploadSuccess(
         `Receipt uploaded for ${months
@@ -162,12 +213,94 @@ function App() {
       }
     } catch (err) {
       console.error('[Yakult GPT Payments] Upload failed', err)
+      if (String(err?.code || '') === 'permission-denied') {
+        setUploadError(
+          'Na-upload ang file pero hindi pa ma-save ang record ngayon. Paki-try ulit mamaya or i-check muna Firestore access.'
+        )
+        return
+      }
       setUploadError(
         err.message ||
           'Something went wrong while uploading your receipt. Please try again.'
       )
     } finally {
       setUploading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!user || !isAdmin) {
+      setAdminPayments([])
+      setAdminUsers([])
+      setAdminError(null)
+      return
+    }
+
+    const loadAdminData = async () => {
+      setLoadingAdmin(true)
+      setAdminError(null)
+      try {
+        const paymentsSnapshot = await getDocs(
+          query(collection(db, 'payments'), orderBy('uploadedAt', 'desc'))
+        )
+        const usersSnapshot = await getDocs(
+          query(collection(db, 'users'), orderBy('email'))
+        )
+
+        setAdminPayments(
+          paymentsSnapshot.docs.map((paymentDoc) => ({
+            id: paymentDoc.id,
+            ...paymentDoc.data(),
+          }))
+        )
+        setAdminUsers(
+          usersSnapshot.docs.map((userDoc) => ({
+            id: userDoc.id,
+            ...userDoc.data(),
+          }))
+        )
+      } catch (err) {
+        console.error('[Yakult GPT Payments] Failed to load admin data', err)
+        setAdminError('Could not load admin data.')
+      } finally {
+        setLoadingAdmin(false)
+      }
+    }
+
+    loadAdminData()
+  }, [user, isAdmin])
+
+  const handleVerifyPayment = async (paymentId) => {
+    if (!isAdmin || !paymentId) return
+    setUpdatingPaymentId(paymentId)
+    try {
+      await updateDoc(doc(db, 'payments', paymentId), {
+        status: 'verified',
+        verifiedAt: serverTimestamp(),
+        verifiedBy: user?.email || user?.uid || 'admin',
+      })
+
+      setAdminPayments((prev) =>
+        prev.map((payment) =>
+          payment.id === paymentId ? { ...payment, status: 'verified' } : payment
+        )
+      )
+      setPayments((prev) => {
+        const updated = prev.map((payment) =>
+          payment.id === paymentId ? { ...payment, status: 'verified' } : payment
+        )
+        setBillingSummary(
+          calculateDueSummary(updated, {
+            billingStartMonth: effectiveBillingStartMonth,
+          })
+        )
+        return updated
+      })
+    } catch (err) {
+      console.error('[Yakult GPT Payments] Failed to verify payment', err)
+      setAdminError('Failed to verify payment.')
+    } finally {
+      setUpdatingPaymentId(null)
     }
   }
 
@@ -196,15 +329,14 @@ function App() {
           <div className="app-header">
             <h1 className="app-title">Yakult GPT Payments</h1>
             <p className="app-subtitle">
-              Log in with your Google account to upload your monthly receipt.
+              Sign in to continue.
             </p>
           </div>
 
           {authError === 'not-authorized' && (
             <div className="alert alert-error">
               <p>
-                Your Google account is not whitelisted. Please contact the admin
-                to be added.
+                Account not in whitelist.
               </p>
             </div>
           )}
@@ -230,28 +362,63 @@ function App() {
       <div className="glow-orb glow-orb-sm" />
 
       <div className="card-shell">
+        <div className="hero-banner" />
         <Header user={user} isAdmin={isAdmin} onSignOut={signOut} />
 
         <main className="card-body">
-          <PaymentStatus
-            loadingPayments={loadingPayments}
-            paymentsError={paymentsError}
-            billingSummary={billingSummary}
-          />
+          {activeView !== 'admin' && (
+            <>
+              <PaymentStatus
+                loadingPayments={loadingPayments}
+                paymentsError={paymentsError}
+                billingSummary={billingSummary}
+                payments={payments}
+                billingStartMonth={effectiveBillingStartMonth}
+              />
 
-          <UploadSection
-            fileInputRef={fileInputRef}
-            selectedFile={selectedFile}
-            uploading={uploading}
-            uploadError={uploadError}
-            uploadSuccess={uploadSuccess}
-            billingSummary={billingSummary}
-            monthsForNextUpload={monthsForNextUpload}
-            onFileChange={handleFileChange}
-            onUpload={handleUpload}
-          />
+              <UploadSection
+                fileInputRef={fileInputRef}
+                selectedFile={selectedFile}
+                uploading={uploading}
+                hasPendingVerification={hasPendingVerification}
+                uploadError={uploadError}
+                uploadSuccess={uploadSuccess}
+                billingSummary={billingSummary}
+                monthsForNextUpload={monthsForNextUpload}
+                onFileChange={handleFileChange}
+                onUpload={handleUpload}
+              />
+            </>
+          )}
 
-          {isAdmin && <AdminDashboard payments={payments} />}
+          {isAdmin && activeView === 'admin' && (
+            <AdminDashboard
+              users={adminUsers}
+              payments={adminPayments}
+              loading={loadingAdmin}
+              error={adminError}
+              updatingPaymentId={updatingPaymentId}
+              onVerifyPayment={handleVerifyPayment}
+              billingStartMonth={effectiveBillingStartMonth}
+            />
+          )}
+
+          <nav className="dock-menu" aria-label="Main menu">
+            <button
+              className={`dock-btn ${activeView !== 'admin' ? 'dock-btn-active' : ''}`}
+              onClick={() => setActiveView('home')}
+            >
+              Home
+            </button>
+            {isAdmin && (
+              <button
+                className={`dock-btn ${activeView === 'admin' ? 'dock-btn-active' : ''}`}
+                onClick={() => setActiveView('admin')}
+              >
+                Admin
+              </button>
+            )}
+          </nav>
         </main>
       </div>
     </div>

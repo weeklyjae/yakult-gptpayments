@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
+  browserLocalPersistence,
   onAuthStateChanged,
+  setPersistence,
   signInWithPopup,
   signInWithRedirect,
   signOut as firebaseSignOut,
@@ -20,6 +22,16 @@ export function AuthProvider({ children }) {
   const normalizedAdmins = ADMIN_EMAILS.map((email) =>
     String(email).trim().toLowerCase()
   )
+
+  useEffect(() => {
+    // Keep users signed in across refreshes and browser restarts.
+    setPersistence(auth, browserLocalPersistence).catch((err) => {
+      console.warn(
+        '[Yakult GPT Payments] Could not set local auth persistence',
+        err
+      )
+    })
+  }, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -63,7 +75,15 @@ export function AuthProvider({ children }) {
           { merge: true }
         )
       } catch (err) {
-        console.error('[Yakult GPT Payments] Failed to sync user profile', err)
+        const code = String(err?.code || '')
+        if (code === 'permission-denied') {
+          // Firestore rules can temporarily block profile sync; auth session is still valid.
+          console.warn(
+            '[Yakult GPT Payments] User profile sync skipped due to Firestore rules.'
+          )
+        } else {
+          console.error('[Yakult GPT Payments] Failed to sync user profile', err)
+        }
       }
     })
 

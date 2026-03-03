@@ -3,7 +3,7 @@
 
 export const MONTHLY_PRICE_PHP = 80
 export const BILLING_DAY = 5 // payments are due every 5th of the month
-export const BILLING_START_MONTH = '2025-01' // YYYY-MM
+export const BILLING_START_MONTH = '2026-03' // YYYY-MM
 
 function parseMonthId(monthId) {
   const [yearStr, monthStr] = String(monthId).split('-')
@@ -40,6 +40,14 @@ export function formatMonthLabel(monthId) {
 export function extractCoveredMonthsFromPayments(payments) {
   const covered = new Set()
   payments.forEach((payment) => {
+    const status = String(payment?.status || '').toLowerCase()
+    const isApproved =
+      status === '' ||
+      status === 'verified' ||
+      status === 'paid' ||
+      status === 'approved'
+    if (!isApproved) return
+
     const months = Array.isArray(payment.monthsCovered)
       ? payment.monthsCovered
       : []

@@ -7,7 +7,7 @@ function Header({ user, isAdmin, onSignOut }) {
         <div className="brand-pip" />
         <div>
           <div className="brand-title">Yakult GPT Payments</div>
-          <div className="brand-tagline">80 PHP / month · due every 5th</div>
+          <div className="brand-tagline">₱80 / month · due every 5th</div>
         </div>
       </div>
 
@@ -27,7 +27,7 @@ function Header({ user, isAdmin, onSignOut }) {
         </div>
         {isAdmin && <span className="admin-badge">Admin</span>}
         <button className="pill-logout" onClick={onSignOut}>
-          Log out
+          Sign out
         </button>
       </div>
     </header>
@@ -35,4 +35,3 @@ function Header({ user, isAdmin, onSignOut }) {
 }
 
 export default Header
-

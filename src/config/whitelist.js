@@ -4,6 +4,7 @@
 
 const WHITELISTED_EMAILS = [
     // 'jhonmartin.abonalla.cics@ust.edu.ph',
+    'jhonmartinabonalla@gmail.com',
   'ravin.agon.cics@ust.edu.ph',
   'ralphlorenz.bonifacio.cics@ust.edu.ph',
   'laurenznicolo.briones.cics@ust.edu.ph',
